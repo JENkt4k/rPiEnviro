@@ -28,6 +28,16 @@ try:
 except ImportError:
     from smbus import SMBus
 
+# import serial 
+
+# def getSerialOrNone(port):
+#     try:
+#        return serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+#     except:
+#        return None
+
+# ser = getSerialOrNone('/dev/ttyACM0')
+
 def calculate_y_pos(x, centre):
     """Calculates the y-coordinate on a parabolic curve, given x."""
     centre = 80
@@ -371,6 +381,7 @@ while True:
     img = overlay_text(img, (WIDTH - margin, 0 + margin), date_string, font_lg, align_right=True)
 
     # Temperature
+    # temperature = bme280.get_temperature()
     if data:
         temperature = scd.temperature
         # print("Temperature:", scd.temperature, "degrees C")
@@ -429,7 +440,41 @@ while True:
     light_icon = Image.open(f"{path}/icons/bulb-{light_desc.lower()}.png")
     img.paste(humidity_icon, (80, 18), mask=light_icon)
 
-    # CO2 Sensor
+    # CO2 Sensor via Arduino 
+    # if ser != None:        
+    #     if ser.isOpen():
+    #         try:
+    #             if ser.in_waiting > 0:
+    #                 # example responses
+    #                 # co2(ppm):810 temp(C):25.4 humidity(%):27.4
+    #                 # Waiting for new data
+    #                 lastReading = ser.readline().decode('utf-8').rstrip()
+    #                 if lastReading.startswith('co2(ppm):'):
+    #                     splitColon = lastReading.split(':')
+    #                     strTofloat = splitColon[1].split(' ')[0]
+    #                     co2ppm = f"{strTofloat}" 
+    #                     lastCo2Reading = float(strTofloat)
+    #                 else:
+    #                         co2ppm =  f"{lastCo2Reading}"
+    #         except serial.SerialException as e:
+    #             #There is no new data from serial port
+    #             #return None
+    #             print(f"serial.SerialException: {e}")
+    #         except TypeError as e:
+    #             #Disconnect of USB->UART occured
+    #             print(f"TypeError: {e}")
+    #             ser.close()
+    #             #return None
+    #         except IOError as e:
+    #             print(f"IOError: {e.args}")
+    #             ser = None
+    #     else: 
+    #         ser = getSerialOrNone('/dev/ttyACM0')
+            
+    # else: 
+    #     ser = getSerialOrNone('/dev/ttyACM0')
+
+
     if data:
         lastCo2Reading = scd.CO2
         co2ppm = f"{scd.CO2:.2f}" 
