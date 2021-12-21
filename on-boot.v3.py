@@ -20,13 +20,20 @@ from astral.geocoder import database, lookup
 from astral.sun import sun
 from datetime import datetime, timedelta
 
-import board
-import adafruit_scd30
-
 try:
     from smbus2 import SMBus
 except ImportError:
     from smbus import SMBus
+
+import serial 
+
+def getSerialOrNone(port):
+    try:
+       return serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+    except:
+       return None
+
+ser = getSerialOrNone('/dev/ttyACM0')
 
 def calculate_y_pos(x, centre):
     """Calculates the y-coordinate on a parabolic curve, given x."""
@@ -353,15 +360,11 @@ start_time = time.time()
 
 co2ppm = 'invalid'
 lastCo2Reading = 0.0
-scd = adafruit_scd30.SCD30(board.I2C())
 
 while True:
     path = os.path.dirname(os.path.realpath(__file__))
     progress, period, day, local_dt = sun_moon_time(city_name, time_zone)
     background = draw_background(progress, period, day)
-
-    data = scd.data_available
-    
 
     # Time.
     time_elapsed = time.time() - start_time
@@ -371,11 +374,7 @@ while True:
     img = overlay_text(img, (WIDTH - margin, 0 + margin), date_string, font_lg, align_right=True)
 
     # Temperature
-    if data:
-        temperature = scd.temperature
-        # print("Temperature:", scd.temperature, "degrees C")
-    else:
-        temperature = bme280.get_temperature()
+    temperature = bme280.get_temperature()
 
     # Corrected temperature
     cpu_temp = get_cpu_temperature()
@@ -405,12 +404,8 @@ while True:
     img.paste(temp_icon, (margin, 18), mask=temp_icon)
 
     # Humidity
-    if data:
-        corr_humidity = humidity = scd.relative_humidity
-        # print("Humidity::", scd.relative_humidity, "%%rH")
-    else: 
-        humidity = bme280.get_humidity()
-        corr_humidity = correct_humidity(humidity, temperature, corr_temperature)
+    humidity = bme280.get_humidity()
+    corr_humidity = correct_humidity(humidity, temperature, corr_temperature)
     humidity_string = f"{corr_humidity:.0f}%"
     img = overlay_text(img, (68, 48), humidity_string, font_lg, align_right=True)
     spacing = font_lg.getsize(humidity_string)[1] + 1
@@ -429,12 +424,35 @@ while True:
     light_icon = Image.open(f"{path}/icons/bulb-{light_desc.lower()}.png")
     img.paste(humidity_icon, (80, 18), mask=light_icon)
 
-    # CO2 Sensor
-    if data:
-        lastCo2Reading = scd.CO2
-        co2ppm = f"{scd.CO2:.2f}" 
-        # print("CO2:", scd.CO2, "PPM") 
-
+    # CO2 Sensor via Arduino 
+    if ser != None:
+        try:
+            if ser.in_waiting > 0:
+                # example responses
+                # co2(ppm):810 temp(C):25.4 humidity(%):27.4
+                # Waiting for new data
+                lastReading = ser.readline().decode('utf-8').rstrip()
+                if lastReading.startswith('co2(ppm):'):
+                    splitColon = lastReading.split(':')
+                    strTofloat = splitColon[1].split(' ')[0]
+                    co2ppm = f"{strTofloat}" 
+                    lastCo2Reading = float(strTofloat)
+                else:
+                        co2ppm =  f"{lastCo2Reading}"
+        except serial.SerialException as e:
+            #There is no new data from serial port
+            #return None
+            print(f"serial.SerialException: {e}")
+        except TypeError as e:
+            #Disconnect of USB->UART occured
+            print(f"TypeError: {e}")
+            ser.close()
+            #return None
+        except IOError as e:
+            print(f"IOError: {e}")
+            ser.close()
+    else: 
+        ser = getSerialOrNone('/dev/ttyACM0')
     img = overlay_text(img, (WIDTH - margin, 48), co2ppm, font_lg, align_right=True)
     pressure_desc = 'co2'.upper() #describe_pressure(words[1]).upper()
     spacing = font_lg.getsize(co2ppm)[1] + 1
